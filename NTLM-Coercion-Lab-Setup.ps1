@@ -156,11 +156,11 @@ $vulnerabilities = @{
 $seenVulnerabilities = New-Object 'System.Collections.Generic.HashSet[string]'
 
 function Show-HelpMenu {
-    Write-Host '=== Vulnerability Enabler Script ==='
-    Write-Host 'Enables and Disables vulnerabilities in a Windows Domain Controller'
+    Write-Host '=== NTLM Coercion Lab Setup ==='
+    Write-Host 'Enables and Disables NTLM coercion related vulnerabilities'
     Write-Host '* Run without vulnerabilities to open the interactive shell'
     Write-Host ''
-    Write-Host 'Usage: vuln-script.ps1 <FLAGS> <enable/disable> [<vulnerabilities>] (or "all")'
+    Write-Host 'Usage: NTLM-Coercion-Lab-Setup.ps1 <FLAGS> <enable/disable> [<vulnerabilities>] (or "all")'
     Write-Host ''
     Write-Host 'Flags:'
     Write-Host '  -y  Confirm all prompts'
