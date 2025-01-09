@@ -281,8 +281,12 @@ function Switch-Vulnerability {
 }
 
 function Switch-All {
+    param (
+        [bool]$DefaultYes
+    )
+
     foreach ($vulnerabilityName in $vulnerabilities.Keys) {
-        Switch-Vulnerability -VulnerabilityName $vulnerabilityName -Action $actionState
+        Switch-Vulnerability -VulnerabilityName $vulnerabilityName -Action $actionState -DefaultYes $defaultYes
     }
 }
 
@@ -313,7 +317,7 @@ if ($args.Count -eq 1) {
 }
 
 if (($args | ForEach-Object { if ($_ -is [string]) { $_.ToLower() } }) -contains 'all') {
-    Switch-All
+    Switch-All -DefaultYes $defaultYes
     exit 0
 }
 
