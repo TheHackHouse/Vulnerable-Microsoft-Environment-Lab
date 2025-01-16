@@ -29,6 +29,8 @@ $Global:PlusLine = "[+]"
 $Global:ErrorLine = "[-]"
 $Global:InfoLine = "[*]"
 
+$Global:Characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.ToCharArray()
+
 function Write-Good { param($String) Write-Host $Global:PlusLine $String -ForegroundColor 'Green' }
 function Write-Bad { param($String) Write-Host $Global:ErrorLine $String -ForegroundColor 'Red' }
 function Write-Info { param($String) Write-Host $Global:InfoLine $String -ForegroundColor 'Gray'; echo $String >> generate.log }
@@ -785,6 +787,16 @@ function Switch-NTLMSubVuln {
     }
 }
 
+function Enable-ADModule {
+    if (-not (Get-WindowsFeature -Name RSAT-AD-PowerShell).Installed) {
+        Write-Host 'Active Directory module not found, installing...'
+        Install-WindowsFeature RSAT-AD-PowerShell | Out-Null
+        Import-Module ActiveDirectory
+    } else {
+        Write-Host 'Active Directory module found, skipping...'
+    }
+}
+
 function Enable-ADCS {
     if (-not (Get-WindowsFeature -Name AD-Certificate).Installed) {
         Write-Host 'Active Directory Certificate Services not found, installing...'
@@ -817,7 +829,8 @@ function Enable-WebEnrollment {
 function New-VulnerableUserTemplate {
     Write-Host 'Creating vulnerable template...'
     Import-Module '.\deps\ADCSTemplate'
-    New-ADCSTemplate -DisplayName VulnerableUserTemplate -JSON (Get-Content '.\deps\VulnerableUserTemplate.json' -Raw) -Publish -Identity "$Global:Domain\Domain Users"
+    $randomTemplateSuffix = -join ((1..4) | ForEach-Object { $Global:Characters | Get-Random })
+    New-ADCSTemplate -DisplayName "VulnerableUserTemplate-$randomTemplateSuffix" -JSON (Get-Content '.\deps\VulnerableUserTemplate.json' -Raw) -Publish -Identity "$Global:Domain\Domain Users"
 }
 
 function Invoke-ADCSLab {
@@ -837,6 +850,7 @@ function Invoke-ADCSLab {
         switch ($subChoice) {
             "1" {
                 Write-Host 'Enabling ESC1...'
+                Enable-ADModule
                 Enable-ADCS
                 New-VulnerableUserTemplate
                 Write-Host 'Done!'
@@ -861,6 +875,7 @@ function Invoke-ADCSLab {
             }
             "8" {
                 Write-Host 'Enabling ESC8...'
+                Enable-ADModule
                 Enable-ADCS
                 Enable-WebEnrollment
                 New-VulnerableUserTemplate
