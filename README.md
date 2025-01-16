@@ -24,3 +24,10 @@ Vulnerabilities:
 * use `-y` to automatically confirm all prompts
 * Use `all` to enable/disable all vulnerabilities
 * Run without vulnerabilities to open the interactive shell
+
+## Vulnerable-AD-plus-plus
+> A fork of [Vulnerable-AD-plus](https://github.com/WaterExecution/vulnerable-AD-plus/tree/master)
+
+> Uses `ADCSTemplate` from [GOAD](https://github.com/Orange-Cyberdefense/GOAD/tree/main)
+
+This script relies on the `deps` folder for option 14 (AD CS Vulnerabilities)
