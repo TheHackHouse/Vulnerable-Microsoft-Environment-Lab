@@ -824,7 +824,9 @@ function New-Template {
     Write-Host 'Creating vulnerable template...'
     Import-Module '.\deps\ADCSTemplate'
     $randomTemplateSuffix = -join ((1..4) | ForEach-Object { $Global:Characters | Get-Random })
-    New-ADCSTemplate -DisplayName "$templateName-$randomTemplateSuffix" -JSON (Get-Content ".\deps\VulnerableTemplates\$templateName.json" -Raw) -Publish -Identity $Identity
+    $fullTemplateName = "$templateName-$randomTemplateSuffix"
+    New-ADCSTemplate -DisplayName $fullTemplateName -JSON (Get-Content ".\deps\VulnerableTemplates\$templateName.json" -Raw) -Publish -Identity $Identity
+    return $fullTemplateName
 }
 
 function Enable-ADCSVulnerability {
@@ -836,17 +838,20 @@ function Enable-ADCSVulnerability {
 
     switch ($choiceNumber) {
         1 {
-            New-Template -TemplateName 'ESC1'
+            New-Template -TemplateName 'ESC1' | Out-Null
         }
         2 {
-            New-Template -TemplateName 'ESC2'
+            New-Template -TemplateName 'ESC2' | Out-Null
         }
         3 {
-            New-Template -TemplateName 'ESC3-1'
-            New-Template -TemplateName 'ESC3-2'
+            New-Template -TemplateName 'ESC3-1' | Out-Null
+            New-Template -TemplateName 'ESC3-2' | Out-Null
         }
         4 {
-            New-Template -TemplateName 'ESC4'
+            $templateName = New-Template -TemplateName 'ESC4'
+            Import-Module '.\deps\PSPKI'
+            Write-Host 'Updating Authenticated Users ACL...'
+            Get-CertificateTemplate -Name $templateName | Get-CertificateTemplateAcl | Add-CertificateTemplateAcl -Identity 'Authenticated Users' -AccessType Allow -AccessMask FullControl | Set-CertificateTemplateAcl | Out-Null
         }
         6 {
             Write-Host 'Adding vulnerable edit flag to registry...'
@@ -918,7 +923,7 @@ function Invoke-ADCSLab {
             { ($_ -gt 0) -and ($_ -lt 9) -and ($_ -ne 5) } {
                 Enable-ADModule
                 Enable-ADCS
-                
+
                 Enable-ADCSVulnerability -ChoiceNumber $subChoice
             }
             9 {
