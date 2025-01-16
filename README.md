@@ -28,6 +28,8 @@ Vulnerabilities:
 ## Vulnerable-AD-plus-plus
 > A fork of [Vulnerable-AD-plus](https://github.com/WaterExecution/vulnerable-AD-plus/tree/master)
 
-> Uses `ADCSTemplate` from [GOAD](https://github.com/Orange-Cyberdefense/GOAD/tree/main)
+> Includes `ADCSTemplate` from [GOAD](https://github.com/Orange-Cyberdefense/GOAD/tree/main)
 
-This script relies on the `deps` folder for option 14 (AD CS Vulnerabilities)
+> Includes `PSPKI` from [PKI Solutions (PSPKI)](https://github.com/PKISolutions/PSPKI/)
+
+This script relies on the `deps` folder

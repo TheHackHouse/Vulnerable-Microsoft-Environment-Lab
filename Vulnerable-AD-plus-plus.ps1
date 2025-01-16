@@ -792,7 +792,8 @@ function Enable-ADModule {
         Write-Host 'Active Directory module not found, installing...'
         Install-WindowsFeature RSAT-AD-PowerShell | Out-Null
         Import-Module ActiveDirectory
-    } else {
+    }
+    else {
         Write-Host 'Active Directory module found, skipping...'
     }
 }
@@ -815,75 +816,131 @@ function Enable-ADCS {
     }
 }
 
-function Enable-WebEnrollment {
-    if (-not (Get-WindowsFeature -Name Adcs-Web-Enrollment).Installed) {
-        Write-Host 'Web Enrollment not enabled, enabling...'
-        Add-WindowsFeature Adcs-Web-Enrollment | Out-Null
-        Install-AdcsWebEnrollment -Force | Out-Null
-    }
-    else {
-        Write-Host 'Web Enrollment already enabled, skipping...'
-    }
-}
-
-function New-VulnerableUserTemplate {
+function New-Template {
+    param (
+        [string]$TemplateName,
+        [string]$Identity = "$Global:Domain\Domain Users"
+    )
     Write-Host 'Creating vulnerable template...'
     Import-Module '.\deps\ADCSTemplate'
     $randomTemplateSuffix = -join ((1..4) | ForEach-Object { $Global:Characters | Get-Random })
-    New-ADCSTemplate -DisplayName "VulnerableUserTemplate-$randomTemplateSuffix" -JSON (Get-Content '.\deps\VulnerableUserTemplate.json' -Raw) -Publish -Identity "$Global:Domain\Domain Users"
+    New-ADCSTemplate -DisplayName "$templateName-$randomTemplateSuffix" -JSON (Get-Content ".\deps\VulnerableTemplates\$templateName.json" -Raw) -Publish -Identity $Identity
+}
+
+function Enable-ADCSVulnerability {
+    param (
+        [int]$ChoiceNumber
+    )
+
+    Write-Host "Enabling ESC$choiceNumber..."
+
+    switch ($choiceNumber) {
+        1 {
+            New-Template -TemplateName 'ESC1'
+        }
+        2 {
+            New-Template -TemplateName 'ESC2'
+        }
+        3 {
+            New-Template -TemplateName 'ESC3-1'
+            New-Template -TemplateName 'ESC3-2'
+        }
+        4 {
+            New-Template -TemplateName 'ESC4'
+        }
+        6 {
+            Write-Host 'Adding vulnerable edit flag to registry...'
+            certutil -config "$Global:Domain\VulnerableEnterpriseCA" -setreg 'policy\EditFlags' +EDITF_ATTRIBUTESUBJECTALTNAME2 | Out-Null
+        }
+        7 {
+            Import-Module '.\deps\PSPKI'
+            $ACE = @(New-Object SysadminsLV.PKI.Security.AccessControl.CertSrvAccessRule ([Security.Principal.NTAccount]"Domain Users"), "ManageCA", "Allow")
+            $ACE += New-Object SysadminsLV.PKI.Security.AccessControl.CertSrvAccessRule ([Security.Principal.NTAccount]"Domain Users"), "ManageCertificates", "Allow"
+            Write-Host 'Adding vulnerable Domain User ACE to CA ACL...'
+            Get-CertificationAuthority | Where-Object { $_.DisplayName -eq 'VulnerableEnterpriseCA' } | Get-CertificationAuthorityAcl | Add-CertificationAuthorityAcl -AccessRule $ACE | Set-CertificationAuthorityAcl -RestartCA | Out-Null
+        }
+        8 {
+            if (-not (Get-WindowsFeature -Name Adcs-Web-Enrollment).Installed) {
+                Write-Host 'Web Enrollment not enabled, enabling...'
+                Add-WindowsFeature Adcs-Web-Enrollment | Out-Null
+                Install-AdcsWebEnrollment -Force | Out-Null
+            }
+            else {
+                Write-Host 'Web Enrollment already enabled, skipping...'
+            }
+        
+            if (-not (Get-WindowsFeature -Name Adcs-Enroll-Web-Pol).Installed) {
+                Write-Host 'Enrollment Policy Web Service not enabled, enabling...'
+                Add-WindowsFeature Adcs-Enroll-Web-Pol | Out-Null
+                Install-AdcsEnrollmentPolicyWebService -Force | Out-Null
+            }
+            else {
+                Write-Host 'Enrollment Policy Web Service already enabled, skipping...'
+            }
+        
+            if (-not (Get-WindowsFeature -Name Adcs-Enroll-Web-Svc).Installed) {
+                Write-Host 'Enrollment Web Service not enabled, enabling...'
+                Add-WindowsFeature Adcs-Enroll-Web-Svc | Out-Null
+                Install-AdcsEnrollmentWebService -Force | Out-Null
+            }
+            else {
+                Write-Host 'Enrollment Web Service already enabled, skipping...'
+            }
+        }
+    }
+
+    Write-Host 'Done!'
 }
 
 function Invoke-ADCSLab {
     do {
         Write-Host "`nAD CS Vulnerabilities:"
         Write-Host "1. Enable ESC1     Domain escalation via No Issuance Requirements + Enrollable Client Authentication/Smart Card Logon OID templates + CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT"
-        Write-Host "2. (NOT IMPLEMENTED) Enable ESC2     Domain escalation via No Issuance Requirements + Enrollable Any Purpose EKU or no EKU"
-        Write-Host "3. (NOT IMPLEMENTED) Enable ESC3     Domain escalation via No Issuance Requirements + Certificate Request Agent EKU + no enrollment agent restrictions"
-        Write-Host "4. (NOT IMPLEMENTED) Enable ESC4     Domain escalation via misconfigured certificate template access control"
-        Write-Host "5. (NOT IMPLEMENTED) Enable ESC5     Domain escalation via vulnerable PKI AD Object Access Control"
-        Write-Host "6. (NOT IMPLEMENTED) Enable ESC6     Domain escalation via the EDITF_ATTRIBUTESUBJECTALTNAME2 setting on CAs + No Manager Approval + Enrollable Client Authentication/Smart Card Logon OID templates"
-        Write-Host "7. (NOT IMPLEMENTED) Enable ESC7     Vulnerable Certificate Authority Access Control"
+        Write-Host "2. Enable ESC2     Domain escalation via No Issuance Requirements + Enrollable Any Purpose EKU or no EKU"
+        Write-Host "3. Enable ESC3     Domain escalation via No Issuance Requirements + Certificate Request Agent EKU + no enrollment agent restrictions"
+        Write-Host "4. Enable ESC4     Domain escalation via misconfigured certificate template access control"
+        Write-Host "5. (NOT IMPLEMENTED)"
+        Write-Host "6. Enable ESC6     Domain escalation via the EDITF_ATTRIBUTESUBJECTALTNAME2 setting on CAs + No Manager Approval + Enrollable Client Authentication/Smart Card Logon OID templates"
+        Write-Host "7. Enable ESC7     Vulnerable Certificate Authority Access Control"
         Write-Host "8. Enable ESC8     NTLM Relay to AD CS HTTP Endpoints"
-        Write-Host "9. Return to Main Menu"
+        Write-Host "9. Enable All"
+        Write-Host "10. Return to Main Menu"
+        Write-Host "99. Quit"
 
-        $subChoice = Read-Host "Enter your selection (1..9)"
+        try {
+            $subChoice = [int](Read-Host "Enter your selection (1..10, or 99 to quit)")
+        }
+        catch {
+            $subChoice = 0
+        }
+
         switch ($subChoice) {
-            "1" {
-                Write-Host 'Enabling ESC1...'
+            { ($_ -gt 0) -and ($_ -lt 9) -and ($_ -ne 5) } {
                 Enable-ADModule
                 Enable-ADCS
-                New-VulnerableUserTemplate
-                Write-Host 'Done!'
+                
+                Enable-ADCSVulnerability -ChoiceNumber $subChoice
             }
-            "2" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "3" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "4" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "5" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "6" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "7" {
-                Write-Host 'This vulnerability has not been implemented yet.'
-            }
-            "8" {
-                Write-Host 'Enabling ESC8...'
+            9 {
                 Enable-ADModule
                 Enable-ADCS
-                Enable-WebEnrollment
-                New-VulnerableUserTemplate
-                Write-Host 'Done!'
+
+                Write-Host 'Enabling all...'
+                Enable-ADCSVulnerability -ChoiceNumber 1
+                Enable-ADCSVulnerability -ChoiceNumber 2
+                Enable-ADCSVulnerability -ChoiceNumber 3
+                Enable-ADCSVulnerability -ChoiceNumber 4
+                Enable-ADCSVulnerability -ChoiceNumber 6
+                Enable-ADCSVulnerability -ChoiceNumber 7
+                Enable-ADCSVulnerability -ChoiceNumber 8
             }
-            "9" {
+            10 {
                 Write-Host "Returning to Main Menu..."
                 return
+            }
+            99 {
+                Write-Host 'Exiting the Application...'
+                Exit
             }
             default {
                 Write-Host "Invalid selection, please try again."
